@@ -5,7 +5,8 @@
  Copyright (C) 2005 Dominic Thuillier
  Copyright (C) 2007 Luis Cota
  Copyright (C) 2015 Gouthaman Balaraman
- Copyright (C) 2018 Matthias Lungwitz 
+ Copyright (C) 2018 Matthias Lungwitz
+ Copyright (C) 2022 Magnus Mencke
 
  This file is part of QuantLib, a free-software/open-source library
  for financial quantitative analysts and developers - http://quantlib.org/
@@ -65,7 +66,7 @@ class OneFactorAffineModel : public ShortRateModel {
                           Array factors) const;
 
     Real discountBond(Time now, Time maturity, Rate rate) const;
-    DiscountFactor discount(Time t) const;  
+    DiscountFactor discount(Time t) const;
 };
 
 %shared_ptr(Vasicek)
@@ -76,6 +77,8 @@ class Vasicek : public OneFactorAffineModel {
                Real b = 0.05,
                Real sigma = 0.01,
                Real lambda = 0.0);
+
+    Real discountBondOption (Option::Type type, Real strike, Time maturity, Time bondMaturity) const override;
 };
 
 
@@ -84,8 +87,8 @@ class HullWhite : public Vasicek {
   public:
     HullWhite(const Handle<YieldTermStructure>& termStructure,
                  Real a = 0.1, Real sigma = 0.01);
-                 
-    static Rate convexityBias(Real futurePrice, Time t, Time T, 
+
+    static Rate convexityBias(Real futurePrice, Time t, Time T,
                               Real sigma, Real a);
 
     // TermStructureConsistentModel
