@@ -6,6 +6,7 @@
  Copyright (C) 2016 Peter Caspers
  Copyright (C) 2017, 2018, 2019 Matthias Lungwitz
  Copyright (C) 2018 Matthias Groncki
+ Copyright (C) 2023 Marcin Rybacki
 
  This file is part of QuantLib, a free-software/open-source library
  for financial quantitative analysts and developers - http://quantlib.org/
@@ -41,22 +42,34 @@ using QuantLib::FloatFloatSwap;
 using QuantLib::OvernightIndexedSwap;
 using QuantLib::MakeOIS;
 using QuantLib::ZeroCouponSwap;
+using QuantLib::EquityTotalReturnSwap;
+using QuantLib::ArithmeticAverageOIS;
+using QuantLib::simplifyNotificationGraph;
 %}
 
 %shared_ptr(Swap)
 class Swap : public Instrument {
+    %warnfilter(509) Swap;
   public:
     enum Type { Receiver = -1, Payer = 1 };
     Swap(const std::vector<ext::shared_ptr<CashFlow> >& firstLeg,
          const std::vector<ext::shared_ptr<CashFlow> >& secondLeg);
     Swap(const std::vector<Leg>& legs,
          const std::vector<bool>& payer);
+    Size numberOfLegs() const;
     Date startDate() const;
     Date maturityDate() const;
     const Leg & leg(Size i);
     Real legNPV(Size j) const;
     Real legBPS(Size k) const;
+    DiscountFactor startDiscounts(Size j) const;
+    DiscountFactor endDiscounts(Size j) const;
+    DiscountFactor npvDateDiscount() const;
+    bool payer(Size j) const;
 };
+
+void simplifyNotificationGraph(Swap& swap, bool unregisterCoupons = false);
+
 
 %shared_ptr(VanillaSwap)
 class VanillaSwap : public Swap {
@@ -69,9 +82,9 @@ class VanillaSwap : public Swap {
                     const ext::shared_ptr<IborIndex>& index,
                     Spread spread,
                     const DayCounter& floatingDayCount,
-                    boost::optional<bool> withIndexedCoupons = boost::none) {
+                    ext::optional<bool> withIndexedCoupons = ext::nullopt) {
             // work around the lack of typemap for this argument
-            boost::optional<BusinessDayConvention> paymentConvention = boost::none;
+            ext::optional<BusinessDayConvention> paymentConvention = ext::nullopt;
 
             return new VanillaSwap(type, nominal, fixedSchedule, fixedRate, fixedDayCount,
                                    floatSchedule, index, spread, floatingDayCount,
@@ -283,7 +296,7 @@ class DiscountingSwapEngine : public PricingEngine {
                               const Date& settlementDate = Date(),
                               const Date& npvDate = Date()) {
             return new DiscountingSwapEngine(discountCurve,
-                                             boost::none,
+                                             ext::nullopt,
                                              settlementDate,
                                              npvDate);
         }
@@ -348,7 +361,7 @@ class OvernightIndexedSwap : public Swap {
             const DayCounter& fixedDC,
             const ext::shared_ptr<OvernightIndex>& index,
             Spread spread = 0.0,
-            Natural paymentLag = 0,
+            Integer paymentLag = 0,
             BusinessDayConvention paymentAdjustment = Following,
             Calendar paymentCalendar = Calendar(),
             bool telescopicValueDates = false,
@@ -362,11 +375,26 @@ class OvernightIndexedSwap : public Swap {
             const DayCounter& fixedDC,
             const ext::shared_ptr<OvernightIndex>& index,
             Spread spread = 0.0,
-            Natural paymentLag = 0,
+            Integer paymentLag = 0,
             BusinessDayConvention paymentAdjustment = Following,
             Calendar paymentCalendar = Calendar(),
             bool telescopicValueDates = false,
             RateAveraging::Type averagingMethod = RateAveraging::Compound);
+
+    OvernightIndexedSwap(Type type,
+                         const std::vector<Real>& fixedNominals,
+                         const Schedule& fixedSchedule,
+                         Rate fixedRate,
+                         const DayCounter& fixedDC,
+                         const std::vector<Real>& overnightNominals,
+                         const Schedule& overnightSchedule,
+                         const ext::shared_ptr<OvernightIndex>& overnightIndex,
+                         Spread spread = 0.0,
+                         Integer paymentLag = 0,
+                         BusinessDayConvention paymentAdjustment = Following,
+                         const Calendar& paymentCalendar = Calendar(),
+                         bool telescopicValueDates = false,
+                         RateAveraging::Type averagingMethod = RateAveraging::Compound);
 
     Rate fixedLegBPS();
     Real fixedLegNPV();
@@ -381,6 +409,7 @@ class OvernightIndexedSwap : public Swap {
     Frequency paymentFrequency();
     Rate fixedRate();
     const DayCounter& fixedDayCount();
+    ext::shared_ptr<OvernightIndex> overnightIndex() const;
     Spread spread();
     const Leg& fixedLeg();
     const Leg& overnightLeg();
@@ -412,7 +441,7 @@ class MakeOIS {
         MakeOIS& withRule(DateGeneration::Rule r);
         MakeOIS& withPaymentFrequency(Frequency f);
         MakeOIS& withPaymentAdjustment(BusinessDayConvention convention);
-        MakeOIS& withPaymentLag(Natural lag);
+        MakeOIS& withPaymentLag(Integer lag);
         MakeOIS& withPaymentCalendar(const Calendar& cal);
         MakeOIS& withEndOfMonth(bool flag = true);
         MakeOIS& withFixedLegDayCount(const DayCounter& dc);
@@ -558,5 +587,106 @@ class ZeroCouponSwap : public Swap {
     Real floatingLegNPV() const;
     Real fairFixedPayment() const;
     Rate fairFixedRate(const DayCounter& dayCounter) const;
+};
+
+%shared_ptr(EquityTotalReturnSwap)
+class EquityTotalReturnSwap : public Swap {
+  public:
+    EquityTotalReturnSwap(Type type,
+                          Real nominal,
+                          Schedule schedule,
+                          ext::shared_ptr<EquityIndex> equityIndex,
+                          const ext::shared_ptr<IborIndex>& interestRateIndex,
+                          DayCounter dayCounter,
+                          Rate margin,
+                          Real gearing = 1.0,
+                          Calendar paymentCalendar = Calendar(),
+                          BusinessDayConvention paymentConvention = Unadjusted,
+                          Natural paymentDelay = 0);
+
+    EquityTotalReturnSwap(Type type,
+                          Real nominal,
+                          Schedule schedule,
+                          ext::shared_ptr<EquityIndex> equityIndex,
+                          const ext::shared_ptr<OvernightIndex>& interestRateIndex,
+                          DayCounter dayCounter,
+                          Rate margin,
+                          Real gearing = 1.0,
+                          Calendar paymentCalendar = Calendar(),
+                          BusinessDayConvention paymentConvention = Unadjusted,
+                          Natural paymentDelay = 0);
+
+    // Inspectors
+    Type type() const;
+    Real nominal() const;
+    
+    const ext::shared_ptr<EquityIndex>& equityIndex() const;
+    const ext::shared_ptr<InterestRateIndex>& interestRateIndex() const;
+    
+    const Schedule& schedule() const;
+    const DayCounter& dayCounter() const;
+    Rate margin() const;
+    Real gearing() const;
+    const Calendar& paymentCalendar() const;
+    BusinessDayConvention paymentConvention() const;
+    Natural paymentDelay() const;
+
+    const Leg& equityLeg() const;
+    const Leg& interestRateLeg() const;
+
+    Real equityLegNPV() const;
+    Real interestRateLegNPV() const;
+    Real fairMargin() const;
+};
+
+%shared_ptr(ArithmeticAverageOIS)
+class ArithmeticAverageOIS : public Swap {
+  public:
+    ArithmeticAverageOIS(Type type,
+                         Real nominal,
+                         const Schedule& fixedLegSchedule,
+                         Rate fixedRate,
+                         DayCounter fixedDC,
+                         ext::shared_ptr<OvernightIndex> overnightIndex,
+                         const Schedule& overnightLegSchedule,
+                         Spread spread = 0.0,
+                         Real meanReversionSpeed = 0.03,
+                         Real volatility = 0.00, // NO convexity adjustment by default
+                         bool byApprox = false); // TRUE to use Katsumi Takada approximation
+    ArithmeticAverageOIS(Type type,
+                         std::vector<Real> nominals,
+                         const Schedule& fixedLegSchedule,
+                         Rate fixedRate,
+                         DayCounter fixedDC,
+                         ext::shared_ptr<OvernightIndex> overnightIndex,
+                         const Schedule& overnightLegSchedule,
+                         Spread spread = 0.0,
+                         Real meanReversionSpeed = 0.03,
+                         Real volatility = 0.00, // NO convexity adjustment by default
+                         bool byApprox = false); // TRUE to use Katsumi Takada approximation
+
+    Type type() const;
+    Real nominal() const;
+    std::vector<Real> nominals() const;
+
+    Frequency fixedLegPaymentFrequency();
+    Frequency overnightLegPaymentFrequency();
+
+    Rate fixedRate() const;
+    const DayCounter& fixedDayCount();
+
+    ext::shared_ptr<OvernightIndex> overnightIndex();
+    Spread spread() const;
+
+    const Leg& fixedLeg() const;
+    const Leg& overnightLeg() const;
+
+    Real fixedLegBPS() const;
+    Real fixedLegNPV() const;
+    Real fairRate() const;
+
+    Real overnightLegBPS() const;
+    Real overnightLegNPV() const;
+    Spread fairSpread() const;
 };
 #endif

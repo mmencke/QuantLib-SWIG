@@ -7,7 +7,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - language: python3
+          - language: python
           - language: java
             config: -old
           - language: java
@@ -17,10 +17,13 @@ jobs:
           - language: scala
     container: ghcr.io/lballabio/quantlib-swig-devenv:${{ matrix.language }}
     steps:
-    - name: Set up git permissions
+    - uses: actions/checkout@v4
+    - name: Build
       run: |
-        git config --global --add safe.directory $GITHUB_WORKSPACE
-    - uses: actions/checkout@v3
-    - name: Build and check
+        ./.ci/${{ matrix.language }}${{ matrix.config }}.build
+    - name: Install
       run: |
-        ./.build/${{ matrix.language }}${{ matrix.config }}.build
+        ./.ci/${{ matrix.language }}${{ matrix.config }}.install
+    - name: Check
+      run: |
+        ./.ci/${{ matrix.language }}${{ matrix.config }}.check

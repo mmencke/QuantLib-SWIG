@@ -25,7 +25,7 @@
 #ifndef quantlib_short_rate_models_i
 #define quantlib_short_rate_models_i
 
-%include calibrationhelpers.i
+%include calibratedmodel.i
 %include grid.i
 %include options.i
 
