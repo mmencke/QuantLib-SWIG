@@ -71,6 +71,7 @@ class Index : public Observable {
     bool hasHistoricalFixing(const Date& fixingDate) const;
     Real fixing(const Date& fixingDate,
                 bool forecastTodaysFixing = false) const;
+    Real pastFixing(const Date& fixingDate) const;
     void addFixing(const Date& fixingDate, Rate fixing,
                    bool forceOverwrite = false);
     const TimeSeries<Real>& timeSeries() const;
@@ -347,7 +348,6 @@ class SwapSpreadIndex : public InterestRateIndex {
                     const Real gearing1 = 1.0,
                     const Real gearing2 = -1.0);
     Rate forecastFixing(const Date& fixingDate) const;
-    Rate pastFixing(const Date& fixingDate) const;
     ext::shared_ptr<SwapIndex> swapIndex1();
     ext::shared_ptr<SwapIndex> swapIndex2();
     Real gearing1();
@@ -367,7 +367,14 @@ class EquityIndex : public Index {
                 Handle<YieldTermStructure> interest = {},
                 Handle<YieldTermStructure> dividend = {},
                 Handle<Quote> spot = {});
+    EquityIndex(std::string name,
+                Calendar fixingCalendar,
+                Currency currency,
+                Handle<YieldTermStructure> interest = {},
+                Handle<YieldTermStructure> dividend = {},
+                Handle<Quote> spot = {});
 
+    Currency currency() const;
     Handle<YieldTermStructure> equityInterestRateCurve() const;
     Handle<YieldTermStructure> equityDividendCurve() const;
     Handle<Quote> spot() const;
@@ -404,6 +411,7 @@ export_quoted_xibor_instance(Bkbm6M,Bkbm);
 
 export_xibor_instance(Euribor);
 export_quoted_xibor_instance(EuriborSW,Euribor);
+export_quoted_xibor_instance(Euribor1W,Euribor);
 export_quoted_xibor_instance(Euribor2W,Euribor);
 export_quoted_xibor_instance(Euribor3W,Euribor);
 export_quoted_xibor_instance(Euribor1M,Euribor);
@@ -483,6 +491,7 @@ export_overnight_instance(Nzocr);
 export_overnight_instance(Sofr);
 export_overnight_instance(Sonia);
 export_overnight_instance(Swestr);
+export_overnight_instance(Tona);
 
 export_swap_instance(EuriborSwapIsdaFixA);
 export_swap_instance(EuriborSwapIsdaFixB);

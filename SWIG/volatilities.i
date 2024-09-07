@@ -50,19 +50,16 @@ enum VolatilityType { ShiftedLognormal, Normal };
 
 #if defined(SWIGPYTHON)
 %typemap(in) ext::optional<VolatilityType> %{
-    if($input == Py_None)
+    if ($input == Py_None)
         $1 = ext::nullopt;
-    else if (PyInt_Check($input))
-        $1 = (VolatilityType) PyInt_AsLong($input);
+    else if (PyLong_Check($input))
+        $1 = (VolatilityType)PyLong_AsLong($input);
     else
-        $1 = (VolatilityType) PyLong_AsLong($input);
+        SWIG_exception(SWIG_TypeError, "int expected");
 %}
-%typecheck (QL_TYPECHECK_VOLATILITYTYPE) ext::optional<VolatilityType> {
-if (PyInt_Check($input) || PyLong_Check($input) || Py_None == $input)
-    $1 = 1;
-else
-    $1 = 0;
-}
+%typecheck (QL_TYPECHECK_VOLATILITYTYPE) ext::optional<VolatilityType> %{
+    $1 = (PyLong_Check($input) || $input == Py_None) ? 1 : 0;
+%}
 #endif
 
 %{
@@ -713,6 +710,19 @@ deprecate_feature(SwaptionVolCube2, InterpolatedSwaptionVolatilityCube)
 
 
 %{
+using QuantLib::SpreadedSwaptionVolatility;
+%}
+
+%shared_ptr(SpreadedSwaptionVolatility)
+class SpreadedSwaptionVolatility : public SwaptionVolatilityStructure {
+  public:
+    SpreadedSwaptionVolatility(const Handle<SwaptionVolatilityStructure>&,
+                               Handle<Quote> spread);
+};
+
+
+
+%{
 using QuantLib::ConstantYoYOptionletVolatility;
 %}
 
@@ -1027,7 +1037,7 @@ using QuantLib::AndreasenHugeLocalVolAdapter;
 using QuantLib::HestonBlackVolSurface;
 %}
 
-%template(CalibrationErrorTuple) ext::tuple<Real, Real, Real>;
+%template(CalibrationErrorTuple) std::tuple<Real, Real, Real>;
 
 %shared_ptr(AndreasenHugeVolatilityInterpl)
 class AndreasenHugeVolatilityInterpl : public Observable {
@@ -1067,7 +1077,7 @@ class AndreasenHugeVolatilityInterpl : public Observable {
         const Handle<YieldTermStructure>& riskFreeRate() const;
 
         // returns min, max and average error in volatility units
-        ext::tuple<Real, Real, Real> calibrationError() const;
+        std::tuple<Real, Real, Real> calibrationError() const;
 
         // returns the option price of the calibration type. In case
         // of CallPut it return the call option price

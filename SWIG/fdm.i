@@ -98,8 +98,8 @@ class FdmBlackScholesMesher : public Fdm1dMesher {
          Volatility vol);
 };
 
-%template(Concentrating1dMesherPoint) ext::tuple<Real, Real, bool>;
-%template(Concentrating1dMesherPointVector) std::vector<ext::tuple<Real, Real, bool> >;
+%template(Concentrating1dMesherPoint) std::tuple<Real, Real, bool>;
+%template(Concentrating1dMesherPointVector) std::vector<std::tuple<Real, Real, bool> >;
 
 
 %shared_ptr(Concentrating1dMesher)
@@ -113,7 +113,7 @@ class Concentrating1dMesher : public Fdm1dMesher {
 
     Concentrating1dMesher(
         Real start, Real end, Size size,
-        const std::vector<ext::tuple<Real, Real, bool> >& cPoints,
+        const std::vector<std::tuple<Real, Real, bool> >& cPoints,
         Real tol = 1e-8);
 };
 
@@ -412,8 +412,9 @@ class FdmLinearOpCompositeProxy : public FdmLinearOpComposite {
 
         QL_ENSURE(pyResult != NULL,
                   "failed to call size() on Python object");
+        QL_ENSURE(PyLong_Check(pyResult), "size() is not an int");
 
-        Size result = PyInt_AsLong(pyResult);
+        Size result = PyLong_AsLong(pyResult);
         Py_XDECREF(pyResult);
         
         return result;    
@@ -476,21 +477,14 @@ class FdmLinearOpCompositeProxy : public FdmLinearOpComposite {
     }
 
   private:
-    Array apply(const Array& r, const std::string& methodName) const {
+    Array apply(const Array& r, const char* methodName) const {
         PyObject* pyArray = SWIG_NewPointerObj(
             SWIG_as_voidptr(&r), SWIGTYPE_p_Array, 0);
-            
-#if !defined(PY_VERSION_HEX) || PY_VERSION_HEX < 0x03040000         
-        std::vector<char> cstr(
-            methodName.c_str(), methodName.c_str() + methodName.size() + 1);  
+
         PyObject* pyResult 
-            = PyObject_CallMethod(callback_, &cstr[0], "O", pyArray);
-#else
-        PyObject* pyResult 
-            = PyObject_CallMethod(callback_, methodName.c_str(), "O", pyArray);
-#endif            
-        Py_XDECREF(pyArray); 
-        
+            = PyObject_CallMethod(callback_, methodName, "O", pyArray);
+
+        Py_DECREF(pyArray);
         return extractArray(pyResult, methodName);        
     }
 
@@ -692,7 +686,7 @@ class FdmTimeDepDirichletBoundary : public FdmBoundaryCondition {
             PyObject* function,
             Size direction, Side side) {
 
-            const ext::function<Real(Real)> f = UnaryFunction(function);
+            const std::function<Real(Real)> f = UnaryFunction(function);
             return new FdmTimeDepDirichletBoundary(
                 mesher, f, direction, side);
         }
@@ -702,7 +696,7 @@ class FdmTimeDepDirichletBoundary : public FdmBoundaryCondition {
             UnaryFunctionDelegate* function,
             Size direction, Side side) {
 
-            const ext::function<Real(Real)> f = UnaryFunction(function);
+            const std::function<Real(Real)> f = UnaryFunction(function);
             return new FdmTimeDepDirichletBoundary(
                 mesher, f, direction, side);        
          }
@@ -1251,21 +1245,14 @@ class FdmInnerValueCalculatorProxy : public FdmInnerValueCalculator {
     }
     
   private: 
-      Real getValue(const FdmLinearOpIterator& iter, Time t, const std::string& methodName) {
+      Real getValue(const FdmLinearOpIterator& iter, Time t, const char* methodName) {
         PyObject* pyIter = SWIG_NewPointerObj(
             SWIG_as_voidptr(&iter), SWIGTYPE_p_FdmLinearOpIterator, 0);
 
-#if !defined(PY_VERSION_HEX) || PY_VERSION_HEX < 0x03040000         
-        std::vector<char> cstr(
-            methodName.c_str(), methodName.c_str() + methodName.size() + 1);  
         PyObject* pyResult 
-            = PyObject_CallMethod(callback_, &cstr[0], "Od",pyIter, t);
-#else
-        PyObject* pyResult 
-            = PyObject_CallMethod(callback_, methodName.c_str(), "Od", pyIter, t);
-#endif            
-            
-        Py_XDECREF(pyIter);
+            = PyObject_CallMethod(callback_, methodName, "Od", pyIter, t);
+
+        Py_DECREF(pyIter);
 
         QL_ENSURE(pyResult != NULL, "failed to call innerValue function on Python object");
 
@@ -1419,7 +1406,7 @@ class FdmAffineModelSwapInnerValue : public FdmInnerValueCalculator {
         FdmAffineModelSwapInnerValue(
             const ext::shared_ptr<ModelType>& disModel,
             const ext::shared_ptr<ModelType>& fwdModel,
-            const ext::shared_ptr<VanillaSwap>& swap,
+            const ext::shared_ptr<FixedVsFloatingSwap>& swap,
             const std::vector<Time>& exerciseTimes,
             const std::vector<Date>& exerciseDates,
             const ext::shared_ptr<FdmMesher>& mesher,
@@ -1440,7 +1427,7 @@ class FdmAffineModelSwapInnerValue : public FdmInnerValueCalculator {
     FdmAffineModelSwapInnerValue(
         const ext::shared_ptr<ModelType>& disModel,
         const ext::shared_ptr<ModelType>& fwdModel,
-        const ext::shared_ptr<VanillaSwap>& swap,
+        const ext::shared_ptr<FixedVsFloatingSwap>& swap,
         const std::map<Time, Date>& exerciseDates,
         const ext::shared_ptr<FdmMesher>& mesher,
         Size direction);

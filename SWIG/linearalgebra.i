@@ -47,8 +47,8 @@ bool ArrayFromSequence(PyObject* source, Array* target) {
             if (PyFloat_Check(o)) {
                 (*target)[i] = PyFloat_AsDouble(o);
                 Py_DECREF(o);
-            } else if (PyInt_Check(o)) {
-                (*target)[i] = Real(PyInt_AsLong(o));
+            } else if (PyLong_Check(o)) {
+                (*target)[i] = PyLong_AsDouble(o);
                 Py_DECREF(o);
             } else {
                 Py_DECREF(o);
@@ -176,8 +176,8 @@ bool ArrayFromSequence(PyObject* source, Array* target) {
                     if (PyFloat_Check(d)) {
                         $1[i][j] = PyFloat_AsDouble(d);
                         Py_DECREF(d);
-                    } else if (PyInt_Check(d)) {
-                        $1[i][j] = Real(PyInt_AsLong(d));
+                    } else if (PyLong_Check(d)) {
+                        $1[i][j] = PyLong_AsDouble(d);
                         Py_DECREF(d);
                     } else {
                         PyErr_SetString(PyExc_TypeError,"doubles expected");
@@ -247,8 +247,8 @@ bool ArrayFromSequence(PyObject* source, Array* target) {
                     if (PyFloat_Check(d)) {
                         temp[i][j] = PyFloat_AsDouble(d);
                         Py_DECREF(d);
-                    } else if (PyInt_Check(d)) {
-                        temp[i][j] = Real(PyInt_AsLong(d));
+                    } else if (PyLong_Check(d)) {
+                        temp[i][j] = PyLong_AsDouble(d);
                         Py_DECREF(d);
                     } else {
                         PyErr_SetString(PyExc_TypeError,"doubles expected");
@@ -326,21 +326,6 @@ function(x,y) plot(as.data.frame(x)))
 %}
 #endif
 
-#if defined(SWIGR)
-%Rruntime %{
-setMethod("+", c("_p_Array", "_p_Array"),
-    function(e1,e2) Array___add__(e1,e2))
-setMethod("-", c("_p_Array", "_p_Array"),
-    function(e1,e2) Array___sub__(e1,e2))
-setMethod("*", c("_p_Array", "_p_Array"),
-    function(e1,e2) Array___mul__(e1,e2))
-setMethod("*", c("_p_Array", "numeric"),
-    function(e1,e2) Array___mul__(e1,e2))
-setMethod("/", c("_p_Array", "numeric"),
-    function(e1,e2) Array___div__(e1,e2))    
-%}
-#endif
-
 
 #if defined(SWIGCSHARP)
 %rename(QlArray) Array;
@@ -360,29 +345,52 @@ class Array {
             out << *self;
             return out.str();
         }
+        #if defined(SWIGPYTHON) || defined(SWIGJAVA)
+        bool operator==(const Array& other) {
+            return (*self) == other;
+        }
+        bool operator!=(const Array& other) {
+            return (*self) != other;
+        }
+        #endif
         #if defined(SWIGPYTHON) || defined(SWIGR)
-        Array __add__(const Array& a) {
-            return Array(*self+a);
+        Array operator-() {
+            return -*self;
         }
-        Array __sub__(const Array& a) {
-            return Array(*self-a);
+        Array operator+(Real a) {
+            return *self+a;
         }
-        Array __mul__(Real a) {
-            return Array(*self*a);
+        Array operator+(const Array& a) {
+            return *self+a;
         }
-        Real __mul__(const Array& a) {
-            return QuantLib::DotProduct(*self,a);
+        Array operator-(Real a) {
+            return *self-a;
         }
-        Array __mul__(const Matrix& a) {
+        Array operator-(const Array& a) {
+            return *self-a;
+        }
+        Array operator*(Real a) {
             return *self*a;
         }
-        Array __div__(Real a) {
-            return Array(*self/a);
+        Array operator*(const Array& a) {
+            return *self*a;
+        }
+        Array operator*(const Matrix& a) {
+            return *self*a;
+        }
+        Array operator/(Real a) {
+            return *self/a;
+        }
+        Array operator/(const Array& a) {
+            return *self/a;
         }
         #endif
         #if defined(SWIGPYTHON)
         Array __rmul__(Real a) {
             return Array(*self*a);
+        }
+        Real __matmul__(const Array& a) {
+            return QuantLib::DotProduct(*self,a);
         }
         Array __getslice__(Integer i, Integer j) {
             Integer size_ = static_cast<Integer>(self->size());
@@ -408,14 +416,9 @@ class Array {
                       "arrays are not resizable");
             std::copy(rhs.begin(),rhs.end(),self->begin()+i);
         }
-        bool __nonzero__() {
-            return (self->size() != 0);
-        }
         bool __bool__() {
             return (self->size() != 0);
         }
-        #endif
-        #if defined(SWIGPYTHON)
         Real __getitem__(Integer i) {
             Integer size_ = static_cast<Integer>(self->size());
             if (i>=0 && i<size_) {
